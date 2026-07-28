@@ -1,25 +1,15 @@
 const { Telegraf } = require('telegraf');
+const { spawn } = require('child_process');
 
-// Render ke environment variable se token uthayega
 const bot = new Telegraf(process.env.BOT_TOKEN);
-
-// Temporary database (In-memory storage for referral & balance simulation)
 const users = {};
+const activeChildBots = {};
 
 bot.start((ctx) => {
-  const userId = ctx.from.id;
-  if (!users[userId]) {
-    users[userId] = { balance: 0, referrals: 0 };
-  }
-  
   ctx.reply(
     `🔥 Welcome to Master Bot Manager!\n\n` +
-    `Send your bot token to launch your child bot using command:\n` +
-    `/launch TOKEN YOUR_ADMIN_ID\n\n` +
-    `Use buttons below or commands:\n` +
-    `/balance - Check your balance\n` +
-    `/bonus - Claim daily bonus\n` +
-    `/refer - Get your referral link`,
+    `Send your bot token to launch your child bot with Professional Admin Panel using command:\n` +
+    `/launch TOKEN YOUR_ADMIN_ID`,
     {
       reply_markup: {
         inline_keyboard: [
@@ -36,30 +26,26 @@ bot.start((ctx) => {
   );
 });
 
-// Balance Command
 bot.command('balance', (ctx) => {
   const userId = ctx.from.id;
   const bal = users[userId] ? users[userId].balance : 0;
   ctx.reply(`💳 Your Current Balance: ₹${bal}`);
 });
 
-// Bonus Command
 bot.command('bonus', (ctx) => {
   const userId = ctx.from.id;
   if (!users[userId]) users[userId] = { balance: 0, referrals: 0 };
   
-  users[userId].balance += 5; // Adding ₹5 bonus
+  users[userId].balance += 5;
   ctx.reply(`🎁 Success! You received ₹5 daily bonus.\n💳 New Balance: ₹${users[userId].balance}`);
 });
 
-// Refer Command
 bot.command('refer', (ctx) => {
-  const userId = ctx.from.id;
   const botUsername = ctx.botInfo.username;
-  ctx.reply(`👥 **Refer & Earn System**\n\nShare this link with your friends and earn rewards:\nhttps://t.me/${botUsername}?start=ref_${userId}`);
+  ctx.reply(`👥 **Refer & Earn System**\n\nShare this link with your friends:\nhttps://t.me/${botUsername}?start=ref_${ctx.from.id}`);
 });
 
-// Launch Child Bot Command
+// Launch Child Bot with Full Admin Panel & Features
 bot.command('launch', (ctx) => {
   const text = ctx.message.text;
   const parts = text.split(' ');
@@ -71,35 +57,78 @@ bot.command('launch', (ctx) => {
   const token = parts[1];
   const adminId = parts[2];
 
-  // Yahan child bot launch ka trigger process execute hoga
-  ctx.reply(`✅ Child Bot Launched Successfully! 🚀\n\nToken: ${token.substring(0, 10)}...\nAdmin ID: ${adminId}`);
-});
+  try {
+    const childProcess = spawn('node', ['-e', `
+      const { Telegraf } = require('telegraf');
+      const childBot = new Telegraf('${token}');
+      const adminId = '${adminId}';
 
-// Inline Button Handlers
-bot.action('btn_balance', (ctx) => {
-  const userId = ctx.from.id;
-  const bal = users[userId] ? users[userId].balance : 0;
-  ctx.answerCbQuery();
-  ctx.reply(`💳 Your Current Balance: ₹${bal}`);
-});
+      childBot.start((c) => {
+        c.reply(
+          '🔥 Welcome to Earning Bot!',
+          {
+            reply_markup: {
+              keyboard: [
+                [{ text: '💳 Balance' }, { text: '👥 Refer Earn' }],
+                [{ text: '🎁 Bonus' }, { text: '📋 Task Earning' }],
+                [{ text: '💸 Withdraw' }]
+              ],
+              resize_keyboard: true
+            }
+          }
+        );
+      });
 
-bot.action('btn_bonus', (ctx) => {
-  const userId = ctx.from.id;
-  if (!users[userId]) users[userId] = { balance: 0, referrals: 0 };
-  
-  users[userId].balance += 5;
-  ctx.answerCbQuery('Bonus Claimed!');
-  ctx.reply(`🎁 Success! You received ₹5 daily bonus.\n💳 New Balance: ₹${users[userId].balance}`);
-});
+      // Admin Panel Command
+      childBot.command('admin', (c) => {
+        if (String(c.from.id) !== String(adminId)) {
+          return c.reply('❌ You are not authorized to use the Admin Panel!');
+        }
 
-bot.action('btn_refer', (ctx) => {
-  const botUsername = ctx.botInfo.username;
-  ctx.answerCbQuery();
-  ctx.reply(`👥 Share your referral link:\nhttps://t.me/${botUsername}?start=ref_${ctx.from.id}`);
+        c.reply(
+          '✨ Professional Admin Panel',
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '📋 Manage Task', callback_data: 'adm_task' },
+                  { text: '📢 Broadcast', callback_data: 'adm_bc' }
+                ],
+                [
+                  { text: '➕ Add Channel', callback_data: 'adm_addch' },
+                  { text: '➖ Remove Channel', callback_data: 'adm_remch' }
+                ],
+                [
+                  { text: '🎁 Create Gift Code', callback_data: 'adm_gift' },
+                  { text: '👥 Set Refer Bonus', callback_data: 'adm_ref' }
+                ],
+                [
+                  { text: '💰 Set Balance', callback_data: 'adm_bal' },
+                  { text: '⚙️ Bot: ✅ Active', callback_data: 'adm_status' }
+                ],
+                [
+                  { text: '💸 Withdraw: ✅ On', callback_data: 'adm_wd' }
+                ]
+              ]
+            }
+          }
+        );
+      });
+
+      childBot.launch();
+      console.log('Child bot with Admin Panel launched successfully.');
+    `]);
+
+    activeChildBots[token] = childProcess;
+
+    ctx.reply(`✅ Child Bot Launched Successfully with Full Admin Panel! 🚀\n\nToken: ${token.substring(0, 10)}...\nAdmin ID: ${adminId}\n\nAb apne child bot par jaakar /admin command try kar!`);
+  } catch (error) {
+    ctx.reply(`❌ Failed to launch child bot: ${error.message}`);
+  }
 });
 
 bot.launch();
-console.log('Master Bot with Referral & Launch features is running successfully...');
+console.log('Master Bot is running successfully...');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
