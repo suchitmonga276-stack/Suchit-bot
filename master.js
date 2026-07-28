@@ -1,11 +1,21 @@
 const { Telegraf } = require('telegraf');
 const { spawn } = require('child_process');
+const http = require('http');
 
 const token = process.env.BOT_TOKEN || process.env.MASTER_BOT_TOKEN;
 if (!token) {
   console.error("❌ **BOT_TOKEN is missing for Master Bot!**");
   process.exit(1);
 }
+
+// **Dummy HTTP Server for Render Port Binding**
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Master Bot is running actively!\n');
+}).listen(PORT, () => {
+  console.log(`🌐 **HTTP Server running on port ${PORT}**`);
+});
 
 const bot = new Telegraf(token);
 const activeChildBots = {};
@@ -42,7 +52,6 @@ function launchChild(childToken, adminId, ctx = null) {
     console.log(`⚠️ **Child Bot exited with code ${code}. Restarting instantly...**`);
     delete activeChildBots[childToken];
     
-    // Auto restart after 2 seconds
     setTimeout(() => {
       launchChild(childToken, adminId);
     }, 2000);
