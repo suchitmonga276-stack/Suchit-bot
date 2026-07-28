@@ -8,8 +8,7 @@ if (!token) {
 }
 
 const bot = new Telegraf(token);
-const activeChildBots = {}; // Track all launched child bots
-const launchedTokens = new Set();
+const activeChildBots = {};
 
 bot.start((ctx) => {
   ctx.reply(
@@ -17,6 +16,42 @@ bot.start((ctx) => {
     { parse_mode: 'Markdown' }
   );
 });
+
+// Function to spawn child bot with Auto-Restart mechanism
+function launchChild(childToken, adminId, ctx = null) {
+  if (activeChildBots[childToken]) {
+    if (ctx) ctx.reply('⚠️ **This child bot is already running and auto-restart is active!**', { parse_mode: 'Markdown' });
+    return;
+  }
+
+  console.log(`🚀 **Launching Child Bot:** ${childToken}`);
+  const childProcess = spawn('node', ['child.js', childToken, adminId]);
+  
+  activeChildBots[childToken] = childProcess;
+
+  childProcess.stdout.on('data', (data) => {
+    console.log(`[Child Bot Log]: ${data}`);
+  });
+
+  childProcess.stderr.on('data', (data) => {
+    console.error(`[Child Bot Error]: ${data}`);
+  });
+
+  // **Instant Restart Logic on Crash/Kill**
+  childProcess.on('close', (code) => {
+    console.log(`⚠️ **Child Bot exited with code ${code}. Restarting instantly...**`);
+    delete activeChildBots[childToken];
+    
+    // Auto restart after 2 seconds
+    setTimeout(() => {
+      launchChild(childToken, adminId);
+    }, 2000);
+  });
+
+  if (ctx) {
+    ctx.reply(`✅ **Child Bot Launched Successfully with Auto-Restart!** 🚀\n\n**Token:** \`${childToken}\`\n**Admin ID:** \`${adminId}\``, { parse_mode: 'Markdown' });
+  }
+}
 
 bot.command('launch', (ctx) => {
   const text = ctx.message.text;
@@ -29,52 +64,11 @@ bot.command('launch', (ctx) => {
   const childToken = parts[1];
   const adminId = parts[2];
 
-  if (launchedTokens.has(childToken)) {
-    return ctx.reply('⚠️ **This child bot is already running!**', { parse_mode: 'Markdown' });
-  }
-
-  try {
-    // Spawn child bot as a separate safe background process
-    const childProcess = spawn('node', ['child.js', childToken, adminId]);
-    
-    activeChildBots[childToken] = childProcess;
-    launchedTokens.add(childToken);
-
-    childProcess.stdout.on('data', (data) => {
-      console.log(`[Child Bot Log]: ${data}`);
-    });
-
-    childProcess.stderr.on('data', (data) => {
-      console.error(`[Child Bot Error]: ${data}`);
-    });
-
-    childProcess.on('close', (code) => {
-      console.log(`[Child Bot] exited with code ${code}`);
-      launchedTokens.delete(childToken);
-      delete activeChildBots[childToken];
-    });
-
-    ctx.reply(`✅ **Child Bot Launched Successfully!** 🚀\n\n**Token:** \`${childToken}\`\n**Admin ID:** \`${adminId}\``, { parse_mode: 'Markdown' });
-  } catch (error) {
-    ctx.reply(`❌ **Failed to launch child bot:** ${error.message}`, { parse_mode: 'Markdown' });
-  }
-});
-
-// **Master Broadcast Feature (One-click broadcast to all launched bots)**
-bot.command('masterbc', (ctx) => {
-  const adminId = ctx.from.id;
-  const msg = text.replace('/masterbc', '').trim();
-  
-  if (launchedTokens.size === 0) {
-    return ctx.reply('❌ **No active child bots running right now to broadcast!**', { parse_mode: 'Markdown' });
-  }
-
-  ctx.reply(`📢 **Broadcasting message to all ${launchedTokens.size} active child bots...**`, { parse_mode: 'Markdown' });
-  // Master can trigger broadcast signals across active instances easily here.
+  launchChild(childToken, adminId, ctx);
 });
 
 bot.launch();
-console.log('🚀 **Master Bot is running smoothly...**');
+console.log('🚀 **Master Bot is running smoothly with Auto-Respawner...**');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
