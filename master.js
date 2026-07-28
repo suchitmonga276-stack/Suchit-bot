@@ -8,7 +8,7 @@ if (!token) {
   process.exit(1);
 }
 
-// **Dummy HTTP Server for Render Port Binding**
+// **HTTP Server for Render Port Binding**
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -27,10 +27,10 @@ bot.start((ctx) => {
   );
 });
 
-// Function to spawn child bot with Auto-Restart mechanism
+// Function to spawn child bot safely
 function launchChild(childToken, adminId, ctx = null) {
   if (activeChildBots[childToken]) {
-    if (ctx) ctx.reply('⚠️ **This child bot is already running and auto-restart is active!**', { parse_mode: 'Markdown' });
+    if (ctx) ctx.reply('⚠️ **This child bot is already running!**', { parse_mode: 'Markdown' });
     return;
   }
 
@@ -47,18 +47,16 @@ function launchChild(childToken, adminId, ctx = null) {
     console.error(`[Child Bot Error]: ${data}`);
   });
 
-  // **Instant Restart Logic on Crash/Kill**
   childProcess.on('close', (code) => {
-    console.log(`⚠️ **Child Bot exited with code ${code}. Restarting instantly...**`);
+    console.log(`⚠️ **Child Bot exited with code ${code}. Restarting...**`);
     delete activeChildBots[childToken];
-    
     setTimeout(() => {
       launchChild(childToken, adminId);
-    }, 2000);
+    }, 3000);
   });
 
   if (ctx) {
-    ctx.reply(`✅ **Child Bot Launched Successfully with Auto-Restart!** 🚀\n\n**Token:** \`${childToken}\`\n**Admin ID:** \`${adminId}\``, { parse_mode: 'Markdown' });
+    ctx.reply(`✅ **Child Bot Launched Successfully!** 🚀\n\n**Token:** \`${childToken}\`\n**Admin ID:** \`${adminId}\``, { parse_mode: 'Markdown' });
   }
 }
 
@@ -77,7 +75,7 @@ bot.command('launch', (ctx) => {
 });
 
 bot.launch();
-console.log('🚀 **Master Bot is running smoothly with Auto-Respawner...**');
+console.log('🚀 **Master Bot is running successfully...**');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
