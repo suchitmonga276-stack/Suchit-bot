@@ -1,7 +1,7 @@
 const { Telegraf } = require('telegraf');
 const { spawn } = require('child_process');
 
-const bot = new Telegraf(process.env.MASTER_BOT_TOKEN);
+const bot = new Telegraf(process.env.BOT_TOKEN || process.env.MASTER_BOT_TOKEN);
 const activeChildBots = {};
 
 bot.start((ctx) => {
